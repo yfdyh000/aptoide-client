@@ -2166,7 +2166,9 @@ public class AptoideUtils {
         public static final String PARENT_KEY = "cm.aptoide.pt.APTOIDE_PARENT";
         public static final String BROTHER_KEY = "cm.aptoide.pt.APTOIDE_BROTHER";
         public static final String ALL_PARENTS_KEY = "cm.aptoide.pt.ALL_APTOIDE_PARENTS";
+        public static final String DEFAULT_PARENT_KEY = "cm.aptoide.pt.APTOIDE_DEFAULT_PARENT";
         public static final String STATE_KEY = "cm.aptoide.pt.NAVIGATION_UTILS_STATE_KEY";
+        public static final String TAG = AppNavigationUtils.class.getSimpleName();
 
         /**
          * stack of intents to parent's activity
@@ -2177,6 +2179,8 @@ public class AptoideUtils {
          * array of possible parents
          */
         private static String[] allParents = null;
+
+        private static String defaultParent = null;
 
         /**
          * Add the given parent's intent to the stack. this method makes sure that there are no repeated activities on stack
@@ -2220,6 +2224,26 @@ public class AptoideUtils {
                 }
             }
             return allParents;
+        }
+
+        /**
+         * If defined, this parent is parent of every screen and if the current screen has no other parent on stack it will be used
+         * @return the default parent to be used
+         */
+        private static String getDefaultParent() {
+            if (defaultParent == null) {
+                try {
+                    //get meta data from manifest
+                    ApplicationInfo aiApplication = Aptoide.getContext().getPackageManager().getApplicationInfo(Aptoide.getContext().getPackageName(), PackageManager.GET_META_DATA);
+                    defaultParent = aiApplication.metaData.getString(AppNavigationUtils.DEFAULT_PARENT_KEY);
+                    if (defaultParent == null) {
+                        Logger.e(TAG, "No default parent defined, use \"" + DEFAULT_PARENT_KEY + "\" key to define it in manifest.");
+                    }
+                } catch (PackageManager.NameNotFoundException e) {
+                    return null;
+                }
+            }
+            return defaultParent;
         }
 
         /**
@@ -2391,15 +2415,21 @@ public class AptoideUtils {
          */
         public static void startParentActivity(Activity activity, AptoideNavigationInterface aptoideNavigationInterface) {
             removeParentFromStack(activity.getIntent());
+            Intent parentActivityIntent = getParent(activity.getClass().getName(), getActivityParentsList(aptoideNavigationInterface));
+            parentActivityIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+            activity.startActivity(parentActivityIntent);
+            activity.finish();
+        }
+
+        @NonNull
+        private static String[] getActivityParentsList(AptoideNavigationInterface aptoideNavigationInterface) {
             String parentList = aptoideNavigationInterface.getMetaData(PARENT_KEY);
+            parentList += "|"+getDefaultParent();
             String[] parentsSplitted = null;
             if (parentList != null) {
                 parentsSplitted = parentList.trim().replace(" ","").split("\\|");
             }
-            Intent parentActivityIntent = getParent(activity.getClass().getName(), parentsSplitted);
-            parentActivityIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-            activity.startActivity(parentActivityIntent);
-            activity.finish();
+            return parentsSplitted;
         }
 
         private static Intent getParentFromClassName(String fullActivityClassName) {
